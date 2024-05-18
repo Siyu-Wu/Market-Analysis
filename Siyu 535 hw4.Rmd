@@ -1,0 +1,182 @@
+---
+title: "Siyu 535 hw4"
+author: "Siyu Wu | USC ID: 2350-0175-97"
+output: pdf_document
+---
+
+
+
+```{r}
+library(readxl)
+library(tibble)
+df0 = read_excel("cities1(1).xlsx",sheet="Data")
+df0$Crime_Trend = NULL
+df0$Unemployment_Threat = NULL
+df = column_to_rownames(df0,"Metropolitan_Area")
+df = scale(df)
+```
+
+
+
+```{r}
+df_prep = df0
+df_prep = column_to_rownames(df_prep,"Metropolitan_Area")
+df_mm = data.frame(apply(df_prep,2,function(x) (x-min(x))/(max(x)-min(x))))
+```
+
+
+
+```{r}
+set.seed(123)
+twcv = function(k) kmeans(df,k,nstart=10)$tot.withinss
+k = 1:15
+twcv_values = sapply(k,twcv)
+plot(k,twcv_values,type="b",pch=19,
+     xlab="Number of Clusters K", ylab="TWCV")
+grid()
+```
+
+
+```{r}
+set.seed(123)
+library(cluster)
+library(factoextra)
+final = kmeans(df,centers=4,nstart=25)
+fviz_cluster(final,data=df,geom = "point")
+```
+
+```{r}
+cluster_number = as.factor(final$cluster)
+m1 = prcomp(df,scale=T)
+fviz_pca_biplot(m1,habillage=cluster_number,geom="point",labelsize=3)
+```
+
+
+```{r}
+dfc = df_mm
+dfc$cluster = final$cluster[rownames(dfc)]
+dfc$Metropolitan_Area = NULL
+library(data.table)
+df_avg = setDT(dfc)[, lapply(.SD, mean), keyby = cluster]
+
+library(dplyr)
+df_avg = data.frame(apply(df_avg %>% select(2:19),2,function(x) x / sum(x)))
+df_avg['cluster'] = c(1,2,3,4)
+
+library(tidyr)
+df_td = gather(df_avg,key='type',value='value',1:18)
+```
+
+
+
+```{r}
+df_min = df_td %>% group_by(type) %>% slice(which.min(value))
+for (i in 1:4){
+  cat('-----------')
+  cat('kCluster',i,'Minimum Attribute\n')
+  print(filter(df_min, cluster==i)$type)
+}
+```
+```{r}
+df_max = df_td %>% group_by(type) %>% slice(which.max(value))
+for (i in 1:4){
+  cat('-----------')
+  cat('kCluster',i,'Maximum Attribute\n')
+  print(filter(df_max, cluster==i)$type)
+}
+```
+
+
+```{r, fig.width=10,fig.height=10}
+ggplot(df_td,aes(x = cluster, y = value, fill = type)) + 
+  geom_col(position = "fill") + 
+  geom_text(aes(label = paste(round(value,2),type)),
+                position = position_fill(vjust=0.5),
+                size=3)
+```
+
+
+```{r}
+distance=dist(df)
+h1 = hclust(distance,method="ward.D")
+cut1 = cutree(h1,k=4)
+fviz_cluster(list(data=df,cluster=cut1),main="Ward linkage",
+             palette = "Set2", show.clust.cent=F,labelsize=10,
+             repel=T,
+             ggtheme=theme_minimal())
+c1 = cophenetic(h1)
+cor(distance,c1)
+```
+
+
+```{r}
+h2 = hclust(distance, method ='average')
+cut2 = cutree(h2,k=4)
+fviz_cluster(list(data = df, cluster = cut2),main="average linkage",
+             palette = "Set2",show.clust.cent = F, labelsize = 10,
+             repel = T, # Avoid label overlap (slow) 
+             ggtheme = theme_minimal() 
+             )
+c2 = cophenetic(h2)
+cor(distance,c2)
+```
+
+```{r}
+h3 = hclust(distance, method ='complete')
+cut3 = cutree(h3,k=4)
+fviz_cluster(list(data = df, cluster = cut3),main="complete linkage",
+             palette = "Set2",show.clust.cent = F, labelsize = 10,
+             repel = T,
+             ggtheme = theme_minimal() 
+             )
+c3 = cophenetic(h3)
+cor(distance,c3)
+```
+
+```{r}
+fviz_pca_biplot(m1,habillage=cut2,geom="point",labelsize=3)
+```
+
+
+
+```{r}
+dfh = df_mm
+dfh$cluster = cut2
+dfh$Metropolitan_Area = NULL
+dfh_avg = setDT(dfh)[, lapply(.SD, mean), keyby = cluster]
+
+dfh_avg = data.frame(apply(dfh_avg %>% select(2:19),2,function(x) x / sum(x)))
+dfh_avg['cluster'] = c(1,2,3,4)
+
+dfh_td = gather(dfh_avg,key='type',value='value',1:18)
+```
+
+
+
+```{r}
+dfh_min = dfh_td %>% group_by(type) %>% slice(which.min(value))
+for (i in 1:4){
+  cat('-----------')
+  cat('hCluster',i,'Minimum Attribute\n')
+  print(filter(dfh_min, cluster==i)$type)
+}
+```
+
+```{r}
+dfh_max = dfh_td %>% group_by(type) %>% slice(which.max(value))
+for (i in 1:4){
+  cat('-----------')
+  cat('hCluster',i,'Maximum Attribute\n')
+  print(filter(dfh_max, cluster==i)$type)
+}
+```
+
+
+```{r, fig.width=10,fig.height=10}
+ggplot(dfh_td,aes(x = cluster, y = value, fill = type)) + 
+  geom_col(position = "fill") + 
+  geom_text(aes(label = paste(round(value,2),type)),
+                position = position_fill(vjust=0.5),
+                size=3)
+```
+
